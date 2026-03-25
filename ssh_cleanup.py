@@ -11,14 +11,15 @@ Compatible with Hetzner Storage Boxes and other SSH-accessible storage.
 import subprocess
 import datetime
 import sys
+import os
 from typing import Tuple, List
 
 # ============== CONFIGURATION ==============
-SSH_HOST = "your-storage-box.example.com"
-SSH_PORT = "22"  # Use "23" for Hetzner Storage Boxes
+SSH_HOST = "your-storagebox.de"
+SSH_PORT = "23"  # Hetzner Storage Boxes use port 23
 SSH_USER = "your-username"
-RETENTION_DAYS = 14
-BASE_DIR = ""  # Empty for home directory, or specify like "/home/user/data"
+RETENTION_DAYS = 7  # Keep last 7 days of recordings
+BASE_DIR = ""  # Empty for home directory (where 2026 folder is located)
 
 # Safety: Only delete folders matching this date pattern
 FOLDER_PATTERN = r'/\d{4}/\d{2}/\d{2}$'  # Matches /2026/02/19 format
@@ -236,7 +237,7 @@ def show_summary(folders_kept: List[str], folders_deleted: int):
     print("=" * 60)
 
     if folders_kept:
-        print(f"\nKeeping {len(folders_kept)} folders (within {RETENTION_DAYS}-day retention):")
+        print(f"\nKeeping {len(folders_kept)} folders (last {RETENTION_DAYS} days):")
         for folder in folders_kept[:10]:
             try:
                 folder_date = parse_folder_date(folder)
@@ -256,6 +257,13 @@ def show_summary(folders_kept: List[str], folders_deleted: int):
 
 def confirm_deletion(folder_count: int) -> bool:
     """Ask user to confirm deletion."""
+    # Check if running in non-interactive mode (cron)
+    if not sys.stdin.isatty():
+        # Running via cron - auto-confirm
+        print(f"\nRunning in automatic mode - deleting {folder_count} folders.")
+        return True
+
+    # Running interactively - ask for confirmation
     print(f"\nAbout to delete {folder_count} folders older than {RETENTION_DAYS} days.")
     response = input("Continue? (yes/no): ").strip().lower()
     return response in ['yes', 'y']
