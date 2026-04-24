@@ -91,23 +91,42 @@ def test_connection() -> bool:
 
 def list_day_folders() -> List[str]:
     """
-    Find all YYYY/MM/DD folders with a single SSH call using `find`.
-    Much faster than looping over ls results.
+    List all YYYY/MM/DD folders using ls (compatible with Hetzner Storage Box
+    restricted shell which does not support `find`).
     """
     base = BASE_DIR if BASE_DIR else "."
     log.info("Scanning %s for date folders …", base)
 
-    # One SSH round-trip for all matching folders
-    cmd = f"find {base} -mindepth 3 -maxdepth 3 -type d " \
-          r"-regextype posix-extended -regex '.*/[0-9]{4}/[0-9]{2}/[0-9]{2}$' " \
-          "2>/dev/null | sort"
-    code, out, err = ssh_run(cmd, timeout=120)
+    folders = []
 
+    # List years
+    code, out, _ = ssh_run(f"ls {base}")
     if code != 0:
-        log.warning("find returned code %d: %s", code, err)
         return []
 
-    folders = [f.strip() for f in out.splitlines() if f.strip()]
+    for year in out.splitlines():
+        year = year.strip()
+        if not year.isdigit() or len(year) != 4:
+            continue
+        # List months
+        code, out2, _ = ssh_run(f"ls {base}/{year}")
+        if code != 0:
+            continue
+        for month in out2.splitlines():
+            month = month.strip()
+            if not month.isdigit() or len(month) != 2:
+                continue
+            # List days
+            code, out3, _ = ssh_run(f"ls {base}/{year}/{month}")
+            if code != 0:
+                continue
+            for day in out3.splitlines():
+                day = day.strip()
+                if not day.isdigit() or len(day) != 2:
+                    continue
+                path = f"{year}/{month}/{day}" if base == "." else f"{base}/{year}/{month}/{day}"
+                folders.append(path)
+
     log.info("Found %d day folders", len(folders))
     return folders
 
